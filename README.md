@@ -1,122 +1,58 @@
-# LangChain Chatbot — RunnableBranch & RunnableParallel
+# LangChain Chatbot using RunnableBranch & RunnableParallel
 
-A Streamlit chatbot built with the latest LangChain Expression Language (LCEL)
-APIs, demonstrating `RunnableBranch`, `RunnableParallel`, and Pydantic
-structured output.
+A Streamlit chatbot that demonstrates current LangChain runnable composition with Groq. It routes questions to focused prompts, generates answer metadata concurrently, and validates the displayed result with Pydantic.
 
 ## Features
 
-- 💬 Streamlit chat interface with persistent chat history
-- 🌳 **RunnableBranch** — routes each question to a Programming Assistant,
-  Math Tutor, or General Assistant prompt pipeline based on its category
-- ⚡ **RunnableParallel** — generates the main answer, keywords, and
-  follow-up questions concurrently from a single user request
-- ✅ **Pydantic structured output** — every response is validated against a
-  `ChatResponse` schema (`answer`, `summary`, `category`, `confidence`,
-  `keywords`, `follow_up_questions`) before it reaches the UI
-- 🔑 API keys loaded from a `.env` file — never hardcoded
-- 🗑️ Optional "Clear Chat" button
+- Streamlit chat interface with session-based history and a clear-chat control.
+- `PromptTemplate` variables for every model prompt; no prompt text is placed in `invoke()`.
+- `RunnableBranch` for programming, mathematics, and general-question prompt pipelines.
+- `RunnableParallel` for concurrent main-answer and enrichment generation from one question.
+- Pydantic structured output via `ChatGroq.with_structured_output(...)`.
+- Environment-based API-key configuration; `.env` is ignored by Git.
 
-## Project Structure
+## Project layout
 
 ```
-project/
-│
-├── app.py              # Streamlit UI
-├── chatbot.py           # RunnableBranch + RunnableParallel + structured output pipeline
-├── prompts.py           # All PromptTemplates
-├── schemas.py            # Pydantic ChatResponse schema
+├── app.py          # Streamlit UI
+├── chatbot.py      # Runnable graph and routing logic
+├── prompts.py      # PromptTemplate definitions
+├── schemas.py      # Pydantic response schemas
 ├── requirements.txt
-├── .env.example
-├── README.md
-└── assets/
+└── .env.example
 ```
 
-## How it works
+## How the runnable graph works
 
-### 1. Classification
-Every question first goes through a small classification chain that labels
-it as `programming`, `mathematics`, or `general`.
+1. `RunnableBranch` examines the question and selects the programming, mathematics, or general `PromptTemplate`.
+2. A structured answer model is run through that selected pipeline.
+3. `RunnableParallel` runs the routed answer pipeline and a separate enrichment pipeline at the same time.
+4. `ChatResponse` validates the combined result before Streamlit displays it.
 
-### 2. RunnableBranch
-```python
-answer_branch = RunnableBranch(
-    (lambda x: x["category"] == "programming", programming_chain),
-    (lambda x: x["category"] == "mathematics", math_chain),
-    general_chain,  # default branch
-)
-```
-Based on the classified category, the question is routed to the matching
-domain-specific prompt pipeline (Programming Assistant, Math Tutor, or
-General Assistant).
-
-### 3. RunnableParallel
-```python
-parallel_chain = RunnableParallel(
-    answer=answer_branch,
-    keywords=keywords_chain,
-    followup=followup_chain,
-)
-```
-The branch output (main answer), a keyword extractor, and a follow-up
-question generator all run **simultaneously** from the same user input.
-
-### 4. Pydantic Structured Output
-```python
-structured_llm = llm.with_structured_output(ChatResponse)
-format_chain = format_prompt | structured_llm
-```
-The parallel results are fed into one final LLM call that is constrained to
-return a validated `ChatResponse` object — not a raw string — which is then
-rendered in the Streamlit UI.
+The final structured schema contains `answer`, `summary`, `confidence`, `category`, and `keywords`. This is Pydantic validation, not a `StrOutputParser`.
 
 ## Installation
 
-1. **Clone the repository**
-   ```bash
-   git clone <your-repo-url>
-   cd project
-   ```
+Requirements: Python 3.10+ and a Groq API key.
 
-2. **Create a virtual environment (recommended)**
-   ```bash
-   python -m venv venv
-   source venv/bin/activate   # Windows: venv\Scripts\activate
-   ```
-
-3. **Install dependencies**
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-4. **Configure your API key**
-   ```bash
-   cp .env.example .env
-   ```
-   Then open `.env` and add your `GROQ_API_KEY` (or switch `get_llm()` in
-   `chatbot.py` to another provider, e.g. `ChatOpenAI`, and add the matching
-   key).
-
-5. **Run the app**
-   ```bash
-   streamlit run app.py
-   ```
-
-## Switching LLM Providers
-
-`chatbot.py` centralizes model creation in `get_llm()`. To use OpenAI,
-Gemini, or a HuggingFace endpoint instead of Groq, swap the model class and
-its key, for example:
-
-```python
-from langchain_openai import ChatOpenAI
-
-def get_llm():
-    return ChatOpenAI(model="gpt-4o-mini", temperature=0.3, api_key=os.getenv("OPENAI_API_KEY"))
+```bash
+python -m venv .venv
+# Windows PowerShell
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+Copy-Item .env.example .env
 ```
 
-## Notes
+Edit `.env` and replace `your_groq_api_key_here` with your own API key. The default model is `openai/gpt-oss-20b`; you may change `GROQ_MODEL` to another active Groq chat model your account can access.
 
-- `.env` is git-ignored — never commit real API keys.
-- The response schema in `schemas.py` can be extended with additional
-  fields as needed.
+## Run
+
+```bash
+streamlit run app.py
+```
+
+Open the local address printed by Streamlit, ask a question, then expand **Structured response** to inspect the validated Pydantic output.
+
+## Security
+
+Do not commit `.env`, API keys, or other credentials. The supplied `.gitignore` excludes common local secrets and virtual-environment files.
