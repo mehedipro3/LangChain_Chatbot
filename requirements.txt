@@ -1,0 +1,20 @@
+# LangChain
+langchain
+langchain-core
+
+# OpenAI
+langchain-openai
+openai
+
+
+#Groq 
+langchain-groq
+
+
+# Environment variables
+python-dotenv
+pydantic
+
+#streamlit 
+
+streamlit
